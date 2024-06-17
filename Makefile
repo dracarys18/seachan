@@ -1,10 +1,11 @@
 CC =clang
-CFLAGS = -arch arm64 -I queue/ -I channel/
+CFLAGS = -rdynamic -arch arm64 -I src/queue/ -I src/channel/
+SRC ?=src
 
 default: build
 
 build:
-	$(CC) $(CFLAGS) queue/queue.c main.c -o chan
+	$(CC) $(CFLAGS) $(SRC)/queue/queue.c $(SRC)/channel/channel.c $(SRC)/main.c -o chan
 
 run: build
 	./chan
