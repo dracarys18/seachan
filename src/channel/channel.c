@@ -43,6 +43,7 @@ channel_t *new_bounded(size_t capacity) {
 
   // Initialise all the channel elements
   chan->que = q;
+  chan->is_closed = false;
   chan->sender = sender;
   chan->receiver = receiver;
   chan->sender->waiting = false;
@@ -71,6 +72,12 @@ channel_t *new_bounded(size_t capacity) {
 int send(channel_t *chan, void *data) {
   pthread_mutex_lock(&chan->mu);
 
+  // If the channel is closed return -1
+  if (chan->is_closed) {
+    pthread_mutex_unlock(&chan->mu);
+    return -1;
+  }
+
   // If the queue is full wait until the receiver removes an element from the
   // queue
   while (chan->que->size == chan->que->capacity) {
@@ -98,6 +105,11 @@ int send(channel_t *chan, void *data) {
 int recv(channel_t *chan, void **data) {
   pthread_mutex_lock(&chan->mu);
 
+  // If the channel is closed return -1
+  if (chan->is_closed) {
+    pthread_mutex_unlock(&chan->mu);
+    return -1;
+  }
   // Wait until the message arrives in the queue
   while (chan->que->size == 0) {
     chan->receiver->waiting = true;
@@ -122,4 +134,27 @@ int recv(channel_t *chan, void **data) {
 
   pthread_mutex_unlock(&chan->mu);
   return -1;
+}
+
+/// Close the channel
+/// @return: 0 if it was successfully closed otherwise -1.
+int close(channel_t *chan) {
+  pthread_mutex_lock(&chan->mu);
+  if (chan->is_closed) {
+    return -1;
+  }
+
+  // If the sender is waiting signal it to process the data
+  if (chan->sender->waiting) {
+    pthread_cond_signal(&chan->sender->cond);
+  }
+
+  // If the receiver is waiting signal it to process the data
+  if (chan->receiver->waiting) {
+    pthread_cond_signal(&chan->receiver->cond);
+  }
+
+  chan->is_closed = true;
+  pthread_mutex_unlock(&chan->mu);
+  return 0;
 }

@@ -11,5 +11,7 @@ int main() {
 
   char *data;
   int k = recv(chan, (void *)&data);
+
+  int l = close(chan);
   printf("Message %s\n", (char *)data);
 }
