@@ -3,6 +3,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/// Free all the allocated variables if something goes wrong during init
+void chan_free(channel_t *chan, bool mutex, bool s_cond) {
+  free(chan->que);
+  free(chan->sender);
+  free(chan->receiver);
+
+  if (mutex) {
+    pthread_mutex_destroy(&chan->mu);
+  }
+  if (s_cond) {
+    pthread_cond_destroy(&chan->sender->cond);
+  }
+
+  free(chan);
+}
+
+/// Initialises the channel and bounds it to 3 messages at one time in the queue
 channel_t *new_bounded(size_t capacity) {
   queue_t *q = init_queue(capacity);
 
@@ -10,58 +27,43 @@ channel_t *new_bounded(size_t capacity) {
   receiver_t *receiver = (receiver_t *)malloc(sizeof(receiver_t));
 
   channel_t *chan = (channel_t *)malloc(sizeof(channel_t));
+
+  // Explicitly free all the allocated variables if any one of them fails
   if (!q || !chan || !sender || !receiver) {
-    printf("Here in malloc of stuff");
     free(q);
     free(sender);
     free(receiver);
     free(chan);
-    printf("I am in goto now");
+
     return NULL;
   }
 
-  if (pthread_mutex_init(&chan->mu, NULL) != 0) {
-    printf("Here in mutex");
-    free(q);
-    free(sender);
-    free(receiver);
-    free(chan);
-    printf("I am in goto now");
-    return NULL;
-  }
-
+  // Initialise all the channel elements
+  chan->que = q;
   chan->sender = sender;
   chan->receiver = receiver;
+  chan->sender->waiting = false;
+  chan->receiver->waiting = false;
+
+  if (pthread_mutex_init(&chan->mu, NULL) != 0) {
+    chan_free(chan, false, false);
+    return NULL;
+  }
 
   if (pthread_cond_init(&chan->sender->cond, NULL) != 0) {
-    printf("Here in cond sender");
-    pthread_mutex_destroy(&chan->mu);
-    free(q);
-    free(sender);
-    free(receiver);
-    free(chan);
-    printf("I am in goto now");
+    chan_free(chan, true, false);
     return NULL;
   }
 
   if (pthread_cond_init(&chan->receiver->cond, NULL) != 0) {
-    printf("Here in cond receiver");
-    pthread_mutex_destroy(&chan->mu);
-    free(q);
-    free(sender);
-    free(receiver);
-    free(chan);
-    printf("I am in goto now");
+    chan_free(chan, true, true);
     return NULL;
   }
-
-  chan->que = q;
-  chan->sender->waiting = false;
-  chan->receiver->waiting = false;
 
   return chan;
 }
 
+/// Send a message in the channel
 int send(channel_t *chan, void *data) {
   pthread_mutex_lock(&chan->mu);
   while (chan->que->size == chan->que->capacity) {
@@ -83,6 +85,7 @@ int send(channel_t *chan, void *data) {
   return -1;
 }
 
+/// Receive a message in the channel
 int recv(channel_t *chan, void **data) {
   pthread_mutex_lock(&chan->mu);
   while (chan->que->size == 0) {
