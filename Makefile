@@ -1,5 +1,5 @@
 CC =clang
-CFLAGS = -rdynamic -arch arm64 -I src/queue/ -I src/channel/
+CFLAGS = -flto=full -O2 -rdynamic -arch arm64 -I src/queue/ -I src/channel/
 SRC ?=src
 
 default: build

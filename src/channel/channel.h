@@ -14,6 +14,7 @@ typedef struct sender {
 typedef struct receiver {
   bool waiting;
   pthread_cond_t cond;
+  bool in_use;
 } receiver_t;
 
 typedef struct chan {

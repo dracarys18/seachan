@@ -105,11 +105,15 @@ int send(channel_t *chan, void *data) {
 int recv(channel_t *chan, void **data) {
   pthread_mutex_lock(&chan->mu);
 
-  // If the channel is closed return -1
-  if (chan->is_closed) {
+  // If the channel is closed or receiver is already in use return -1
+  if (chan->is_closed || chan->receiver->in_use) {
     pthread_mutex_unlock(&chan->mu);
     return -1;
   }
+
+  // Set in use to true to make sure there's only one consumer
+  chan->receiver->in_use = true;
+
   // Wait until the message arrives in the queue
   while (chan->que->size == 0) {
     chan->receiver->waiting = true;
@@ -128,10 +132,16 @@ int recv(channel_t *chan, void **data) {
     if (chan->sender->waiting) {
       pthread_cond_signal(&chan->sender->cond);
     }
+
+    // Free the receiver for other threads to use
+    chan->receiver->in_use = false;
+
     pthread_mutex_unlock(&chan->mu);
     return 0;
   }
 
+  // Free the receiver for other threads to use
+  chan->receiver->in_use = true;
   pthread_mutex_unlock(&chan->mu);
   return -1;
 }
