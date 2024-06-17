@@ -20,6 +20,9 @@ void chan_free(channel_t *chan, bool mutex, bool s_cond) {
 }
 
 /// Initialises the channel and bounds it to 3 messages at one time in the queue
+/// @return:
+///  NULL: If the init was not successful
+///  channel_t: If the init was successful
 channel_t *new_bounded(size_t capacity) {
   queue_t *q = init_queue(capacity);
 
@@ -64,8 +67,12 @@ channel_t *new_bounded(size_t capacity) {
 }
 
 /// Send a message in the channel
+/// @return: 0 if message was sent successfully otherwise -1
 int send(channel_t *chan, void *data) {
   pthread_mutex_lock(&chan->mu);
+
+  // If the queue is full wait until the receiver removes an element from the
+  // queue
   while (chan->que->size == chan->que->capacity) {
     chan->sender->waiting = true;
     pthread_cond_wait(&chan->sender->cond, &chan->mu);
@@ -73,6 +80,7 @@ int send(channel_t *chan, void *data) {
   }
 
   if (enqueue(chan->que, data) == 0) {
+    // If receiver is waiting for a message signal it that message has been sent
     if (chan->receiver->waiting) {
       pthread_cond_signal(&chan->receiver->cond);
     }
@@ -86,8 +94,11 @@ int send(channel_t *chan, void *data) {
 }
 
 /// Receive a message in the channel
+/// @return: 0 if message was received successfully otherwise -1
 int recv(channel_t *chan, void **data) {
   pthread_mutex_lock(&chan->mu);
+
+  // Wait until the message arrives in the queue
   while (chan->que->size == 0) {
     chan->receiver->waiting = true;
     pthread_cond_wait(&chan->receiver->cond, &chan->mu);
@@ -99,6 +110,9 @@ int recv(channel_t *chan, void **data) {
 
   if (message) {
     *data = message;
+
+    // If Sender is waiting for the data to be removed signal sender that it has
+    // been removed
     if (chan->sender->waiting) {
       pthread_cond_signal(&chan->sender->cond);
     }
