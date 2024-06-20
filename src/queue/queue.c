@@ -25,7 +25,7 @@ queue_t *init_queue(size_t capacity) {
   q->data = data;
   q->size = 0;
   q->back = 0;
-  q->front = -1;
+  q->front = 0;
   q->capacity = capacity;
 
   return q;
@@ -38,6 +38,10 @@ int enqueue(queue_t *q, void *data) {
 
   if (q->capacity == INT_MAX) {
     return -1;
+  }
+
+  if ((q->front != -1) && (q->back == q->capacity - 1)) {
+    q->back = 0;
   }
 
   q->data[q->back] = data;
@@ -56,10 +60,14 @@ void *dequeue(queue_t *q) {
     return NULL;
   }
 
-  data = q->data[q->front + 1];
+  if ((q->back < q->front) && (q->front == q->capacity - 1)) {
+    q->front = 0;
+  }
+
+  data = q->data[q->front];
 
   q->size--;
-  q->front--;
+  q->front++;
 
   return data;
 }
@@ -68,5 +76,5 @@ void *peek(queue_t *q) {
   if (q->back == 0) {
     return NULL;
   }
-  return q->data[q->front + 1];
+  return q->data[q->front];
 }
